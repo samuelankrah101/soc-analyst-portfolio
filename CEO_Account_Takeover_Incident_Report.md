@@ -55,6 +55,9 @@ SigninLogs
 
 **Result:** a successful sign-in from the United States at **12:34:49 AM** was followed by a successful sign-in from Nigeria (IP `79.127.149.88`) at **12:54:33 AM** — a gap of 20 minutes between two geographically distant, successful authentications on the same account.
 
+![Impossible travel KQL detection](01_impossible_travel_kql_detection.png)
+*KQL query and results showing the 20-minute gap between the US and Nigeria sign-ins.*
+
 ---
 
 ## 4. Impossible Travel Analysis
@@ -95,7 +98,13 @@ AuditLogs
 | **01:00–1:44 AM** | **23 additional successful sign-ins — Nigeria** | jane.ceo@... | 🔴 **ANOMALOUS** |
 | **01:48:18 AM** | **New authentication method registered mid-session** | Azure MFA StrongAuthenticationService | 🔴 **PERSISTENCE** |
 
+![AuditLogs investigation timeline](02_auditlogs_investigation_timeline.png)
+*AuditLogs showing the full sequence: password reset, MFA setup, and initial logins.*
+
 **Key finding:** the Nigeria-origin session persisted for approximately 48 minutes (23 additional successful sign-ins from the same IP range), and at 1:48:18 AM a new authentication method was registered on the account mid-session. This is a materially more severe finding than the initial login alone — it indicates the actor attempted to establish independent, persistent access to the account rather than a single opportunistic authentication.
+
+![Second Nigeria session sign-ins](03_second_nigeria_session_signins.png)
+*Extended Nigeria-origin session — 23 additional successful sign-ins over ~48 minutes.*
 
 ---
 
@@ -104,6 +113,9 @@ AuditLogs
 A defining characteristic of account takeover versus a one-off suspicious login is whether the actor takes steps to maintain access after the initial compromise. In this case, AuditLogs confirm that a new authentication method was registered on jane.ceo's account at **1:48:18 AM** — roughly 54 minutes into the Nigeria-origin session — initiated via the Azure MFA StrongAuthenticationService.
 
 This technique, formally tracked as **MITRE ATT&CK T1098.005** (Account Manipulation: Device Registration), allows an attacker to retain sign-in capability even after the compromised password is rotated, since the newly registered method is independent of the original credential. In a production environment with real end-user hardware, this would typically surface as a second, distinct device entry (e.g., an unfamiliar phone model or OS) under the account's Authentication Methods — a high-priority indicator for analysts to flag and remove during triage.
+
+![Rogue MFA registration detected](04_rogue_mfa_registration_detected.png)
+*AuditLogs entry capturing the unauthorized MFA registration at 1:48:18 AM, initiated by the Azure MFA StrongAuthenticationService.*
 
 Remediation required a more thorough response than the initial containment: rather than simply resetting the password, the account's authentication methods were fully wiped and required re-registration from a verified, trusted state before regaining usable sign-in capability.
 
@@ -134,6 +146,10 @@ Containment was performed in two passes as the scope of the incident became clea
 - Forced full re-registration of authentication methods, wiping all existing MFA enrollments rather than relying on password rotation alone.
 - Revoked all active sessions a second time to invalidate any tokens issued after the rogue registration.
 - Reset the account password a second time to ensure a fully clean credential state.
+
+| Session Revoked | Authentication Methods Wiped |
+|---|---|
+| ![Containment: session revoked](05_containment_session_revoked.png) | ![Remediation: MFA wiped](06_remediation_mfa_wiped.png) |
 
 ---
 
